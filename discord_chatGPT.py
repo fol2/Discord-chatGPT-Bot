@@ -9,15 +9,12 @@ openai.api_key = [Your OpenAI API key]
 # Replace with your Discord bot token
 DISCORD_BOT_TOKEN = [Your Discord bot token]
 
-# Set the command prefix (e.g., !gpt)
-PREFIX = "gpt"
-
 intents = discord.Intents.default()
 intents.typing = False
 intents.presences = False
 intents.message_content = True
 
-bot = commands.Bot(command_prefix=PREFIX, intents=intents)
+bot = = commands.Bot(command_prefix="--", intents=intents)
 
 # Dictionary to store conversation history for each channel
 channel_history = {}
@@ -29,7 +26,29 @@ def generate_branch_key(channel_id, branch_id):
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
 
-import openai
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+
+    mention = "<@!{}>".format(bot.user.id)
+    if message.content.startswith(mention):
+        content = message.content.replace(mention, "").strip()
+        if content:
+            ctx = await bot.get_context(message)
+            if content.startswith("--"):
+                content = content.replace("--", "", 1)
+                command, *args = content.split(" ")
+                ctx.command = bot.get_command(command)
+                if ctx.command:
+                    await bot.invoke(ctx, *args)
+                return
+            else:
+                ctx.command = bot.get_command("ask")
+                await bot.invoke(ctx, message=content)
+        return
+
+    await bot.process_commands(message)
 
 def truncate_conversation(conversation, max_tokens):
     total_tokens = sum(len(msg) for msg in conversation)
