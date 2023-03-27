@@ -5,9 +5,9 @@ import openai
 from discord.ext import commands
 
 # Replace with your OpenAI API key
-openai.api_key = "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"
+openai.api_key = [Your OpenAI API key]
 # Replace with your Discord bot token
-DISCORD_BOT_TOKEN = "MTA4OTcyMjIzMTUzNTQzOTkyNA.GNYVHh.LJU1c4gJ_yx1DXCBlnjoHLODe_gIxzCq1EY-Q0"
+DISCORD_BOT_TOKEN = [Your Discord bot token]
 
 # Set the command prefix (e.g., !gpt)
 PREFIX = "gpt"
