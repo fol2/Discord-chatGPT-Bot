@@ -10,10 +10,6 @@ openai.api_key = [Your OpenAI API key]
 # Replace with your Discord bot token
 DISCORD_BOT_TOKEN = [Your Discord bot token]
 
-# Set the command prefix (e.g., !gpt)
-PREFIX = "gpt"
-GUILD_ID = 1084650920513650698
-
 intents = discord.Intents.default()
 intents.typing = False
 intents.presences = False
@@ -21,7 +17,6 @@ intents.message_content = True
 
 bot = interactions.Client(
     token=DISCORD_BOT_TOKEN,
-    default_scope=GUILD_ID,
 )
 
 # Dictionary to store conversation history for each channel
