@@ -3,18 +3,26 @@ import discord
 import requests
 import openai
 from discord.ext import commands
+import interactions
 
 # Replace with your OpenAI API key
 openai.api_key = [Your OpenAI API key]
 # Replace with your Discord bot token
 DISCORD_BOT_TOKEN = [Your Discord bot token]
 
+# Set the command prefix (e.g., !gpt)
+PREFIX = "gpt"
+GUILD_ID = 1084650920513650698
+
 intents = discord.Intents.default()
 intents.typing = False
 intents.presences = False
 intents.message_content = True
 
-bot = = commands.Bot(command_prefix="--", intents=intents)
+bot = interactions.Client(
+    token=DISCORD_BOT_TOKEN,
+    default_scope=GUILD_ID,
+)
 
 # Dictionary to store conversation history for each channel
 channel_history = {}
@@ -24,31 +32,7 @@ def generate_branch_key(channel_id, branch_id):
 
 @bot.event
 async def on_ready():
-    print(f'{bot.user} has connected to Discord!')
-
-@bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return
-
-    mention = "<@!{}>".format(bot.user.id)
-    if message.content.startswith(mention):
-        content = message.content.replace(mention, "").strip()
-        if content:
-            ctx = await bot.get_context(message)
-            if content.startswith("--"):
-                content = content.replace("--", "", 1)
-                command, *args = content.split(" ")
-                ctx.command = bot.get_command(command)
-                if ctx.command:
-                    await bot.invoke(ctx, *args)
-                return
-            else:
-                ctx.command = bot.get_command("ask")
-                await bot.invoke(ctx, message=content)
-        return
-
-    await bot.process_commands(message)
+    print(f'{bot.me.name} has connected to Discord!')
 
 def truncate_conversation(conversation, max_tokens):
     total_tokens = sum(len(msg) for msg in conversation)
@@ -65,6 +49,10 @@ def generate_response(channel_history):
     
     for msg in truncated_history:
         role, content = msg.split(": ", 1)
+        if role == "chatGPT":
+            role = "assistant"
+        else:
+            role = "user"
         conversation.append({"role": role.lower(), "content": content})
     
     completions = openai.ChatCompletion.create(
@@ -80,13 +68,30 @@ def generate_response(channel_history):
     token_count = completions.usage['total_tokens']
     return message, token_count
 
-@bot.command(name="ask")
-async def ask(ctx, *, message: str):
+@bot.command(
+    name="gpt",
+    description="Ask chatGPT a question. If you want to branch off the conversation, use the branch command instead.",
+    options=[
+        interactions.Option(
+            name="message",
+            description="The message to send to chatGPT.",
+            type=interactions.OptionType.STRING,
+            required=True,
+        ),
+        interactions.Option(
+            name="branch_id",
+            description="The branch ID to ask the question on. (optional)", 
+            type=interactions.OptionType.INTEGER,
+            required=False,
+        ),
+    ],
+)
+async def gpt(ctx: interactions.CommandContext, message: str, branch_id: int = None):
     try:
-        split_message = message.split(maxsplit=1)
-        if len(split_message) == 2 and split_message[0].isdigit():
-            branch_id = int(split_message[0])
-            question = split_message[1]
+        split_message = message.rsplit(maxsplit=1)
+        if len(split_message) == 2 and split_message[1].isdigit():
+            branch_id = int(split_message[1])
+            question = split_message[0]
         else:
             branch_id = None
             question = message
@@ -103,21 +108,40 @@ async def ask(ctx, *, message: str):
             await ctx.send("Invalid branch_id. Please choose a valid branch_id.")
             return
 
-        channel_history[channel_id][branch_id].append(f"User: {question}")
+        buffering = await ctx.send("Thinking...")
+
+        channel_history[channel_id][branch_id].append(f"{ctx.user.username}: {question}")
 
         response, token_count = generate_response(channel_history[channel_id][branch_id])
 
-        channel_history[channel_id][branch_id].append(f"Assistant: {response}")
+        channel_history[channel_id][branch_id].append(f"{bot.me.name}: {response}")
 
         # Send the response along with the token count and index number
         index = len(channel_history[channel_id][branch_id]) // 2 - 1
-        await ctx.send(f"[{index}] {response}\n\n*Tokens used: {token_count}*")
+        await buffering.edit(content=f"[{index}] {response}\n\n*Tokens used: {token_count}*")
     except Exception as e:
         print(f"Error in ask command: {e}")
         await ctx.send("An error occurred while processing your request. Please try again.")
 
-@bot.command(name="branch")
-async def branch(ctx, index: int, *, new_question):
+@bot.command(
+    name="branch",
+    description="Branch off the conversation and ask chatGPT a new question.",
+    options=[
+        interactions.Option(
+            name="index",
+            description="The index of the message to branch off of.",
+            type=interactions.OptionType.INTEGER,
+            required=True,
+        ),
+        interactions.Option(
+            name="new_question",
+            description="The new question to ask chatGPT.",
+            type=interactions.OptionType.STRING,
+            required=True,
+        ),
+    ],
+)
+async def branch(ctx: interactions.CommandContext, index: int, new_question: str):
     try:
         channel_id = ctx.channel.id
 
@@ -131,23 +155,42 @@ async def branch(ctx, index: int, *, new_question):
 
         branch_id = len(channel_history[channel_id])
         branch_history = channel_history[channel_id][0][:index * 2].copy()
-        branch_history.append(f"User: {new_question}")
+        branch_history.append(f"{ctx.user.username}: {new_question}")
+
+        await ctx.send_response("Thinking...")
 
         response, token_count = generate_response(branch_history)
 
-        branch_history.append(f"Assistant: {response}")
+        branch_history.append(f"{bot.me.name}: {response}")
 
         channel_history[channel_id].append(branch_history)
 
         # Send the response along with the token count and index number
         new_index = len(branch_history) // 2 - 1
-        await ctx.send(f"[{branch_id}-{new_index}] {response}\n\n*Tokens used: {token_count}*")
+        await ctx.edit_response(content=f"[{branch_id}-{new_index}] {response}\n\n*Tokens used: {token_count}*")
     except Exception as e:
         print(f"Error in branch command: {e}")
         await ctx.send("An error occurred while processing your request. Please try again.")
 
-@bot.command(name="review")
-async def review(ctx, branch_id: int = None, index: int = None):
+@bot.command(
+    name="review",
+    description="Review the conversation history.",
+    options=[
+        interactions.Option(
+            name="branch_id",
+            description="The branch ID to review. (optional)",
+            type=interactions.OptionType.INTEGER,
+            required=False,
+        ),
+        interactions.Option(
+            name="index",
+            description="The index of the message to review. (optional)",
+            type=interactions.OptionType.INTEGER,
+            required=False,
+        ),
+    ],
+)
+async def review(ctx: interactions.CommandContext, branch_id: int = None, index: int = None):
     try:
         channel_id = ctx.channel.id
 
@@ -176,8 +219,11 @@ async def review(ctx, branch_id: int = None, index: int = None):
         print(f"Error in review command: {e}")
         await ctx.send("An error occurred while processing your request. Please try again.")
 
-@bot.command(name="reset")
-async def reset(ctx):
+@bot.command(
+    name="reset",
+    description="Reset the conversation history.",
+)
+async def reset(ctx: interactions.CommandContext):
     try:
         channel_id = ctx.channel.id
         history_reset = False
@@ -200,8 +246,11 @@ async def reset(ctx):
         print(f"Error in reset command: {e}")
         await ctx.send("An error occurred while processing your request. Please try again.")
 
-@bot.command(name="list")
-async def list(ctx):
+@bot.command(
+    name="list",
+    description="List the available branches.",
+)
+async def list(ctx: interactions.CommandContext):
     try:
         channel_id = ctx.channel.id
 
@@ -217,8 +266,19 @@ async def list(ctx):
         print(f"Error in gptlist command: {e}")
         await ctx.send("An error occurred while processing your request. Please try again.")
 
-@bot.command(name="regen")
-async def regen(ctx, branch_id: int = None):
+@bot.command(
+    name="regen",
+    description="Regenerate the response to a previous message.",
+    options=[
+        interactions.Option(
+            name="branch_id",
+            description="The branch ID to regenerate. (optional)",
+            type=interactions.OptionType.INTEGER,
+            required=False,
+        ),
+    ],
+)
+async def regen(ctx: interactions.CommandContext, branch_id: int = None):
     try:
         channel_id = ctx.channel.id
 
@@ -246,4 +306,4 @@ async def regen(ctx, branch_id: int = None):
         print(f"Error in gptregen command: {e}")
         await ctx.send("An error occurred while processing your request. Please try again.")
 
-bot.run(DISCORD_BOT_TOKEN)
+bot.start()
