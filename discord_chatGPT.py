@@ -181,4 +181,50 @@ async def reset(ctx):
         print(f"Error in reset command: {e}")
         await ctx.send("An error occurred while processing your request. Please try again.")
 
+@bot.command(name="list")
+async def list(ctx):
+    try:
+        channel_id = ctx.channel.id
+
+        if channel_id not in channel_history:
+            await ctx.send("No branches available.")
+            return
+
+        branch_count = len(channel_history[channel_id])
+        branch_list = ", ".join([str(i) for i in range(branch_count)])
+        await ctx.send(f"Available branches: {branch_list}")
+
+    except Exception as e:
+        print(f"Error in gptlist command: {e}")
+        await ctx.send("An error occurred while processing your request. Please try again.")
+
+@bot.command(name="regen")
+async def regen(ctx, branch_id: int = None):
+    try:
+        channel_id = ctx.channel.id
+
+        if channel_id not in channel_history:
+            await ctx.send("No conversation history to regenerate.")
+            return
+
+        if branch_id is None:
+            branch_id = len(channel_history[channel_id]) - 1
+
+        if branch_id < 0 or branch_id >= len(channel_history[channel_id]):
+            await ctx.send("Invalid branch_id. Please choose a valid branch_id.")
+            return
+
+        conversation = channel_history[channel_id][branch_id]
+        user_question = conversation[-2]
+
+        response, token_count = generate_response(conversation[:-1])
+
+        conversation[-1] = f"Assistant: {response}"
+
+        index = len(conversation) // 2 - 1
+        await ctx.send(f"[{index}] {response}\n\n*Tokens used: {token_count}*")
+    except Exception as e:
+        print(f"Error in gptregen command: {e}")
+        await ctx.send("An error occurred while processing your request. Please try again.")
+
 bot.run(DISCORD_BOT_TOKEN)
