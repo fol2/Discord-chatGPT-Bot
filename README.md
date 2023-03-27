@@ -2,7 +2,8 @@
 
 ## A simple Discord chatGPT Bot
 
-functions:
+
+### Functions
 <li>gptask - conversations
 <li>gptask [id] - branch conversations
 <li>gptbranch [id] - create branch at [id]
@@ -10,5 +11,6 @@ functions:
 <li>gptreview [id] - review specific branch conversations
 <li>gptreset - reset entire converstion
 
-## <How to use>
+  
+### How to use
 Simply run the py
