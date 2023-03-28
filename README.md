@@ -13,7 +13,8 @@
 <li>/list - list all branches
 <li>/regen - regen previous reply
 <li>/regen [id] - regen last reply at branch [id]
-
+<li>/settings - change settings, such as max_token, system content & temperature
   
 ### How to use
 Simply run the py
+Add the bot to your server
